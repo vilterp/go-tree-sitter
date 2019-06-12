@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -e
+
+function usage {
+  cat <<-EOF
+USAGE
+
+  $0  [-h] [-l language-name] [-e example-file-name]
+
+OPTIONS
+
+  -h  print this message
+
+  -l  run only the benchmarks for the given language
+
+  -e  run only the benchmarks that parse the example file with the given name
+
+EOF
+}
+
+while getopts "hl:e:" option; do
+  case ${option} in
+    h)
+      usage
+      exit
+      ;;
+    e)
+      export TREE_SITTER_BENCHMARK_EXAMPLE_FILTER=${OPTARG}
+      ;;
+    l)
+      export TREE_SITTER_BENCHMARK_LANGUAGE_FILTER=${OPTARG}
+      ;;
+  esac
+done
+
+cargo bench

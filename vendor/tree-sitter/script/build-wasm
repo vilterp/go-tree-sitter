@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+set -e
+
+args="-Os"
+minify=1
+if [[ "$1" == "--debug" ]]; then
+  minify=0
+  args="-s ASSERTIONS=1 -s SAFE_HEAP=1 -Os"
+fi
+
+exports=$(cat lib/web/exports.json)
+
+mkdir -p target/scratch target/release
+
+docker run                          \
+  --rm                              \
+  -v $(pwd):/src                    \
+  -u $(id -u)                       \
+  -e EMCC_FORCE_STDLIBS=libc++      \
+  trzeci/emscripten-slim            \
+                                    \
+  emcc                              \
+  -s WASM=1                         \
+  -s TOTAL_MEMORY=33554432          \
+  -s ALLOW_MEMORY_GROWTH            \
+  -s MAIN_MODULE=2                  \
+  -s NO_FILESYSTEM=1                \
+  -s "EXPORTED_FUNCTIONS=${exports}" \
+  $args                             \
+  -std=c99                          \
+  -D 'fprintf(...)='                \
+  -I lib/src                        \
+  -I lib/include                    \
+  -I lib/utf8proc                   \
+  --js-library lib/web/imports.js   \
+  --pre-js lib/web/prefix.js        \
+  --post-js lib/web/binding.js      \
+  lib/src/lib.c                     \
+  lib/web/binding.c                 \
+  -o target/scratch/tree-sitter.js
+
+
+if [[ "$minify" == "1" ]]; then
+  if [ ! -d lib/web/node_modules/terser ]; then
+    (
+      cd lib/web
+      npm install
+    )
+  fi
+  lib/web/node_modules/.bin/terser   \
+    --compress                       \
+    --mangle                         \
+    --keep-fnames                    \
+    --keep-classnames                \
+    -- target/scratch/tree-sitter.js \
+    > target/release/tree-sitter.js
+else
+  cp target/scratch/tree-sitter.js target/release/tree-sitter.js
+fi
+
+mv target/scratch/tree-sitter.wasm target/release/tree-sitter.wasm
